@@ -21,8 +21,6 @@
 package encoding
 
 import (
-	"fmt"
-
 	"github.com/m3db/m3x/checked"
 	xtime "github.com/m3db/m3x/time"
 )
@@ -37,11 +35,6 @@ const (
 	defaultMarkerOpcode        = 0x100
 	defaultNumMarkerOpcodeBits = 9
 	defaultNumMarkerValueBits  = 2
-)
-
-var (
-	panicOnRead  bool
-	panicOnWrite bool
 )
 
 var (
@@ -231,9 +224,6 @@ func newMarkerEncodingScheme(
 			scheme.tails[i][j] = tail
 		}
 	}
-	fmt.Println("---------")
-	panicOnWrite = true
-	panicOnRead = true
 	return scheme
 }
 
