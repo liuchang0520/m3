@@ -21,6 +21,7 @@
 package storage
 
 import (
+	stdlib "context"
 	"errors"
 	"fmt"
 	"sync"
@@ -38,12 +39,15 @@ import (
 	"github.com/m3db/m3/src/dbnode/storage/namespace"
 	"github.com/m3db/m3/src/dbnode/storage/repair"
 	"github.com/m3db/m3/src/dbnode/ts"
-	"github.com/m3db/m3/src/dbnode/x/metrics"
+	xmetrics "github.com/m3db/m3/src/dbnode/x/metrics"
+	xidx "github.com/m3db/m3/src/m3ninx/idx"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
 	"github.com/m3db/m3x/ident"
 	xtest "github.com/m3db/m3x/test"
 	xtime "github.com/m3db/m3x/time"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/mocktracer"
 
 	"github.com/fortytw2/leaktest"
 	"github.com/golang/mock/gomock"
@@ -1100,7 +1104,13 @@ func TestNamespaceIndexQuery(t *testing.T) {
 	defer closer()
 
 	ctx := context.NewContext()
-	query := index.Query{}
+	mtr := mocktracer.New()
+	sp := mtr.StartSpan("root")
+	ctx.SetGoContext(opentracing.ContextWithSpan(stdlib.Background(), sp))
+
+	query := index.Query{
+		Query: xidx.NewTermQuery([]byte("foo"), []byte("bar")),
+	}
 	opts := index.QueryOptions{}
 
 	idx.EXPECT().Query(ctx, query, opts)
@@ -1109,6 +1119,10 @@ func TestNamespaceIndexQuery(t *testing.T) {
 
 	idx.EXPECT().Close().Return(nil)
 	require.NoError(t, ns.Close())
+
+	spans := mtr.FinishedSpans()
+	require.Len(t, spans, 1)
+	assert.Equal(t, nsQuerySpanID, spans[0].OperationName)
 }
 
 func TestNamespaceAggregateQuery(t *testing.T) {

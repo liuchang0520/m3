@@ -1,7 +1,7 @@
 package: github.com/m3db/m3
 import:
   - package: github.com/m3db/m3x
-    version: b66c9c466c4726e3c9b47b1f837abbbe0f14be81
+    version: 4e7e80a1233b549608036f9d06847d96577601d7
     vcs: git
     subpackages:
       - checked
@@ -203,7 +203,7 @@ import:
 
   # START_JAEGER_DEPS
   - package: github.com/uber/jaeger-lib
-    version: ^1.5.0
+    version: ^2.0.0
 
   - package: github.com/uber/jaeger-client-go
     version: ~2.15.0

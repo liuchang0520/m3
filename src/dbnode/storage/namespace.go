@@ -21,6 +21,7 @@
 package storage
 
 import (
+	stdctx "context"
 	"errors"
 	"fmt"
 	"math"
@@ -39,6 +40,7 @@ import (
 	"github.com/m3db/m3/src/dbnode/storage/namespace"
 	"github.com/m3db/m3/src/dbnode/storage/series"
 	"github.com/m3db/m3/src/dbnode/ts"
+	opentracingutil "github.com/m3db/m3/src/dbnode/x/opentracing"
 	"github.com/m3db/m3/src/dbnode/x/xio"
 	"github.com/m3db/m3x/context"
 	xerrors "github.com/m3db/m3x/errors"
@@ -47,6 +49,8 @@ import (
 	xlog "github.com/m3db/m3x/log"
 	xsync "github.com/m3db/m3x/sync"
 	xtime "github.com/m3db/m3x/time"
+	opentracing "github.com/opentracing/opentracing-go"
+	opentracinglog "github.com/opentracing/opentracing-go/log"
 
 	"github.com/uber-go/tally"
 )
@@ -54,6 +58,10 @@ import (
 var (
 	errNamespaceAlreadyClosed    = errors.New("namespace already closed")
 	errNamespaceIndexingDisabled = errors.New("namespace indexing is disabled")
+)
+
+const (
+	nsQuerySpanID = "namespace_query_ids"
 )
 
 type commitLogWriter interface {
@@ -601,6 +609,26 @@ func (n *dbNamespace) QueryIDs(
 	query index.Query,
 	opts index.QueryOptions,
 ) (index.QueryResult, error) {
+	var (
+		sp    opentracing.Span
+		spCtx stdctx.Context
+	)
+
+	goCtx, exists := ctx.GoContext()
+	if exists {
+		sp, spCtx = opentracingutil.StartSpanFromContext(goCtx, nsQuerySpanID)
+		sp.LogFields(
+			opentracinglog.String("query", query.String()),
+			opentracinglog.String("namespace", n.ID().String()),
+			opentracinglog.Int("limit", opts.Limit),
+			opentracingutil.Time("start", opts.StartInclusive),
+			opentracingutil.Time("end", opts.EndExclusive),
+		)
+
+		ctx.SetGoContext(spCtx)
+		defer sp.Finish()
+	}
+
 	callStart := n.nowFn()
 	if n.reverseIndex == nil { // only happens if indexing is enabled.
 		n.metrics.queryIDs.ReportError(n.nowFn().Sub(callStart))

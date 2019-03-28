@@ -67,6 +67,7 @@ import (
 	"github.com/m3db/m3/src/dbnode/x/xio"
 	"github.com/m3db/m3/src/m3ninx/postings"
 	"github.com/m3db/m3/src/m3ninx/postings/roaring"
+	"github.com/m3db/m3/src/query/util/logging"
 	xdocs "github.com/m3db/m3/src/x/docs"
 	"github.com/m3db/m3/src/x/lockfile"
 	"github.com/m3db/m3/src/x/mmap"
@@ -81,7 +82,9 @@ import (
 
 	"github.com/coreos/etcd/embed"
 	"github.com/coreos/pkg/capnslog"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
+	xnetcontext "golang.org/x/net/context"
 )
 
 const (
@@ -90,6 +93,7 @@ const (
 	bgProcessLimitInterval           = 10 * time.Second
 	maxBgProcessLimitMonitorDuration = 5 * time.Minute
 	filePathPrefixLockFile           = ".lock"
+	serviceName                      = "m3dbnode"
 )
 
 // RunOptions provides options for running the server
@@ -147,6 +151,13 @@ func Run(runOpts RunOptions) {
 		os.Exit(1)
 	}
 
+	// Currently, the zapLogger is being used for tracing only.
+	// todo: use the zapLogger everywhere instead of xlog logger.
+	logging.InitWithCores(nil)
+	ctx := xnetcontext.Background()
+	zapLogger := logging.WithContext(ctx)
+	defer zapLogger.Sync()
+
 	newFileMode, err := cfg.Filesystem.ParseNewFileMode()
 	if err != nil {
 		logger.Fatalf("could not parse new file mode: %v", err)
@@ -181,6 +192,20 @@ func Run(runOpts RunOptions) {
 	hostID, err := cfg.HostID.Resolve()
 	if err != nil {
 		logger.Fatalf("could not resolve local host ID: %v", err)
+	}
+
+	// setup tracer
+	tracer, traceCloser, err := cfg.Tracing.NewTracer(serviceName, scope, zapLogger)
+	if err != nil {
+		logger.Fatalf("could not initialize tracing for m3dbnode: %v", err)
+	}
+
+	defer traceCloser.Close()
+
+	if _, ok := tracer.(opentracing.NoopTracer); ok {
+		logger.Infof("tracing disabled for %s; set `tracing.backend` to enable", serviceName)
+	} else {
+		logger.Infof("tracing enabled for %s", serviceName)
 	}
 
 	capnslog.SetGlobalLogLevel(capnslog.WARNING)
@@ -243,9 +268,13 @@ func Run(runOpts RunOptions) {
 	opts := storage.NewOptions()
 	iopts := opts.InstrumentOptions().
 		SetLogger(logger).
+		SetZapLogger(zapLogger).
 		SetMetricsScope(scope).
-		SetMetricsSamplingRate(cfg.Metrics.SampleRate())
+		SetMetricsSamplingRate(cfg.Metrics.SampleRate()).
+		SetTracer(tracer)
 	opts = opts.SetInstrumentOptions(iopts)
+
+	opentracing.SetGlobalTracer(tracer)
 
 	if cfg.Index.MaxQueryIDsConcurrency != 0 {
 		queryIDsWorkerPool := xsync.NewWorkerPool(cfg.Index.MaxQueryIDsConcurrency)

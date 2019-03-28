@@ -137,6 +137,9 @@ type DBConfiguration struct {
 
 	// Write new series asynchronously for fast ingestion of new ID bursts.
 	WriteNewSeriesAsync bool `yaml:"writeNewSeriesAsync"`
+
+	// Tracing configures opentracing. If not provided, tracing is disabled.
+	Tracing instrument.TracingConfiguration `yaml:"tracing"`
 }
 
 // InitDefaultsAndValidate initializes all default values and validates the Configuration.

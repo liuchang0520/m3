@@ -11,7 +11,8 @@ fi
 
 echo "Bringing up nodes in the background with docker compose, remember to run ./stop.sh when done"
 docker-compose -f docker-compose.yml up $DOCKER_ARGS m3coordinator01
-docker-compose -f docker-compose.yml up $DOCKER_ARGS m3db_seed
+docker-compose -f docker-compose.yml up --build -d --renew-anon-volumes m3db_seed
+# docker-compose -f docker-compose.yml up $DOCKER_ARGS m3db_seed
 docker-compose -f docker-compose.yml up $DOCKER_ARGS prometheus01
 docker-compose -f docker-compose.yml up $DOCKER_ARGS grafana
 
@@ -209,6 +210,11 @@ if [[ "$AGGREGATOR_PIPELINE" = true ]]; then
     # May not necessarily flush
     echo "Sending unaggregated metric to m3collector"
     curl http://localhost:7206/api/v1/json/report -X POST -d '{"metrics":[{"type":"gauge","value":42,"tags":{"__name__":"foo_metric","foo":"bar"}}]}'
+fi
+
+if [[ "$START_JAEGER" = true ]] ; then
+    docker-compose -f docker-compose.yml up $DOCKER_ARGS jaeger
+    echo "Jaeger UI available at localhost:16686"
 fi
 
 echo "Prometheus available at localhost:9090"

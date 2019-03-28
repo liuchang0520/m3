@@ -21,16 +21,19 @@
 package config
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/m3db/m3/src/dbnode/environment"
+	"github.com/m3db/m3/src/query/util/logging"
 	xtest "github.com/m3db/m3/src/x/test"
 	xconfig "github.com/m3db/m3x/config"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/tally"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -292,6 +295,9 @@ db:
   hashing:
     seed: 42
   writeNewSeriesAsync: true
+
+  tracing:
+    backend: jaeger
 `
 
 func TestConfiguration(t *testing.T) {
@@ -777,4 +783,34 @@ func TestNewEtcdEmbedConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "existing", embedCfg.ClusterState)
+}
+
+func TestNewJaegerTracer(t *testing.T) {
+	fd, err := ioutil.TempFile("", "config_jaeger.yaml")
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fd.Close())
+		assert.NoError(t, os.Remove(fd.Name()))
+	}()
+
+	_, err = fd.Write([]byte(testBaseConfig))
+	require.NoError(t, err)
+
+	// Verify is valid
+	var cfg Configuration
+	err = xconfig.LoadFile(&cfg, fd.Name(), xconfig.Options{})
+	require.NoError(t, err)
+
+	logging.InitWithCores(nil)
+	ctx := context.Background()
+	zapLogger := logging.WithContext(ctx)
+	defer zapLogger.Sync()
+
+	testScope := tally.NewTestScope("test_scope", map[string]string{"app": "test"})
+	tracer, closer, err := cfg.DB.Tracing.NewTracer("m3dbnode", testScope, zapLogger)
+	require.NoError(t, err)
+	defer closer.Close()
+
+	// Verify tracer gets created
+	require.NotNil(t, tracer)
 }

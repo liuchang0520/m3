@@ -21,6 +21,7 @@
 package node
 
 import (
+	stdctx "context"
 	"errors"
 	"fmt"
 	"sync"
@@ -36,6 +37,7 @@ import (
 	"github.com/m3db/m3/src/dbnode/storage/block"
 	"github.com/m3db/m3/src/dbnode/storage/index"
 	"github.com/m3db/m3/src/dbnode/ts"
+	opentracingutil "github.com/m3db/m3/src/dbnode/x/opentracing"
 	"github.com/m3db/m3/src/dbnode/x/xio"
 	"github.com/m3db/m3/src/dbnode/x/xpool"
 	"github.com/m3db/m3/src/x/serialize"
@@ -50,6 +52,8 @@ import (
 	xtime "github.com/m3db/m3x/time"
 
 	apachethrift "github.com/apache/thrift/lib/go/thrift"
+	opentracing "github.com/opentracing/opentracing-go"
+	opentracinglog "github.com/opentracing/opentracing-go/log"
 	"github.com/uber-go/tally"
 	"github.com/uber/tchannel-go/thrift"
 )
@@ -66,6 +70,9 @@ const (
 	maxSegmentArrayPooledLength = 32
 	// Any pooled error slices that grow beyond this capcity will be thrown away.
 	writeBatchPooledReqPoolMaxErrorsSliceSize = 4096
+
+	fetchTaggedSpanID = "fetch"
+	querySpanID       = "query"
 )
 
 var (
@@ -256,22 +263,49 @@ func (s *service) Bootstrapped(ctx thrift.Context) (*rpc.NodeBootstrappedResult_
 }
 
 func (s *service) Query(tctx thrift.Context, req *rpc.QueryRequest) (*rpc.QueryResult_, error) {
+	ctx := tchannelthrift.Context(tctx)
+
+	var (
+		sp    opentracing.Span
+		spCtx stdctx.Context
+	)
+
+	goCtx, exists := ctx.GoContext()
+	if exists {
+		sp, spCtx = opentracingutil.StartSpanFromContext(goCtx, querySpanID)
+		sp.LogFields(
+			opentracinglog.String("query", req.Query.String()),
+			opentracinglog.String("namespace", req.NameSpace),
+			opentracingutil.Time("start", time.Unix(0, req.RangeStart)),
+			opentracingutil.Time("end", time.Unix(0, req.RangeStart)),
+		)
+
+		ctx.SetGoContext(spCtx)
+		defer sp.Finish()
+	}
+
 	if s.isOverloaded() {
 		s.metrics.overloadRejected.Inc(1)
 		return nil, tterrors.NewInternalError(errServerIsOverloaded)
 	}
 
-	ctx := tchannelthrift.Context(tctx)
-
 	start, rangeStartErr := convert.ToTime(req.RangeStart, req.RangeType)
 	end, rangeEndErr := convert.ToTime(req.RangeEnd, req.RangeType)
 
 	if rangeStartErr != nil || rangeEndErr != nil {
-		return nil, tterrors.NewBadRequestError(xerrors.FirstError(rangeStartErr, rangeEndErr))
+		err := xerrors.FirstError(rangeStartErr, rangeEndErr)
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
+
+		return nil, tterrors.NewBadRequestError(err)
 	}
 
 	q, err := convert.FromRPCQuery(req.Query)
 	if err != nil {
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
 		return nil, convert.ToRPCError(err)
 	}
 
@@ -285,6 +319,9 @@ func (s *service) Query(tctx thrift.Context, req *rpc.QueryRequest) (*rpc.QueryR
 	}
 	queryResult, err := s.db.QueryIDs(ctx, nsID, index.Query{Query: q}, opts)
 	if err != nil {
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
 		return nil, convert.ToRPCError(err)
 	}
 
@@ -315,6 +352,9 @@ func (s *service) Query(tctx thrift.Context, req *rpc.QueryRequest) (*rpc.QueryR
 		datapoints, err := s.readDatapoints(ctx, nsID, tsID, start, end,
 			req.ResultTimeType)
 		if err != nil {
+			if sp != nil {
+				sp.LogFields(opentracinglog.Error(err))
+			}
 			return nil, convert.ToRPCError(err)
 		}
 		elem.Datapoints = datapoints
@@ -404,14 +444,40 @@ func (s *service) FetchTagged(tctx thrift.Context, req *rpc.FetchTaggedRequest) 
 
 	callStart := s.nowFn()
 	ctx := tchannelthrift.Context(tctx)
+
+	var (
+		sp    opentracing.Span
+		spCtx stdctx.Context
+	)
+
+	goCtx, exists := ctx.GoContext()
+	if exists {
+		sp, spCtx = opentracingutil.StartSpanFromContext(goCtx, fetchTaggedSpanID)
+		sp.LogFields(
+			opentracinglog.String("query", string(req.Query)),
+			opentracinglog.String("namespace", string(req.NameSpace)),
+			opentracingutil.Time("start", time.Unix(0, req.RangeStart)),
+			opentracingutil.Time("end", time.Unix(0, req.RangeStart)),
+		)
+
+		ctx.SetGoContext(spCtx)
+		defer sp.Finish()
+	}
+
 	ns, query, opts, fetchData, err := convert.FromRPCFetchTaggedRequest(req, s.pools)
 	if err != nil {
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
 		s.metrics.fetchTagged.ReportError(s.nowFn().Sub(callStart))
 		return nil, tterrors.NewBadRequestError(err)
 	}
 
 	queryResult, err := s.db.QueryIDs(ctx, ns, query, opts)
 	if err != nil {
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
 		s.metrics.fetchTagged.ReportError(s.nowFn().Sub(callStart))
 		return nil, convert.ToRPCError(err)
 	}

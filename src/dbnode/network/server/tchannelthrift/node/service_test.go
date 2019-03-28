@@ -22,6 +22,7 @@ package node
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -46,6 +47,8 @@ import (
 	xtime "github.com/m3db/m3x/time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber/tchannel-go/thrift"
@@ -1018,6 +1021,10 @@ func TestServiceFetchTagged(t *testing.T) {
 	ctx := tchannelthrift.Context(tctx)
 	defer ctx.Close()
 
+	mtr := mocktracer.New()
+	sp := mtr.StartSpan("root")
+	ctx.SetGoContext(opentracing.ContextWithSpan(context.Background(), sp))
+
 	start := time.Now().Add(-2 * time.Hour)
 	end := start.Add(2 * time.Hour)
 
@@ -1133,6 +1140,10 @@ func TestServiceFetchTagged(t *testing.T) {
 		assert.Equal(t, expectHead, seg.Merged.Head)
 		assert.Equal(t, expectTail, seg.Merged.Tail)
 	}
+
+	spans := mtr.FinishedSpans()
+	require.Len(t, spans, 1)
+	assert.Equal(t, fetchTaggedSpanID, spans[0].OperationName)
 }
 
 func TestServiceFetchTaggedIsOverloaded(t *testing.T) {

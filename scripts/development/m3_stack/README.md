@@ -9,19 +9,29 @@ This docker-compose file will setup the following environment:
 
 ## Usage
 
-Use the `start_m3.sh` and `stop_m3.sh` scripts
+Use the `start_m3.sh` and `stop_m3.sh` scripts.
 
 ## Grafana
 
 Use Grafana by navigating to `http://localhost:3000` and using `admin` for both the username and password. The M3DB dashboard should already be populated and working.
 
+## Jaeger
+
+To start Jaeger, set the environment variable `START_JAEGER` to `true`.
+
+```
+START_JAEGER=true ./start_m3.sh
+```
+
+Use Jaeger by navigating to `http://localhost:16686`.
+
 ## Prometheus
 
-Use Prometheus by navigating to `http://localhost:9090`
+Use Prometheus by navigating to `http://localhost:9090`.
 
 ## Increasing Load
 
-Load can easily be increased by modifying the `prometheus.yml` file to reduce the scrape interval to `1s`
+Load can easily be increased by modifying the `prometheus.yml` file to reduce the scrape interval to `1s`.
 
 ## Containers Hanging / Unresponsive
 
