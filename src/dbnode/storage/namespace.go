@@ -632,14 +632,22 @@ func (n *dbNamespace) QueryIDs(
 	callStart := n.nowFn()
 	if n.reverseIndex == nil { // only happens if indexing is enabled.
 		n.metrics.queryIDs.ReportError(n.nowFn().Sub(callStart))
-		return index.QueryResult{}, errNamespaceIndexingDisabled
+		err := errNamespaceIndexingDisabled
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
+		return index.QueryResult{}, err
 	}
 
 	if n.reverseIndex.BootstrapsDone() < 1 {
 		// Similar to reading shard data, return not bootstrapped
 		n.metrics.queryIDs.ReportError(n.nowFn().Sub(callStart))
+		err := errIndexNotBootstrappedToRead
+		if sp != nil {
+			sp.LogFields(opentracinglog.Error(err))
+		}
 		return index.QueryResult{},
-			xerrors.NewRetryableError(errIndexNotBootstrappedToRead)
+			xerrors.NewRetryableError(err)
 	}
 
 	res, err := n.reverseIndex.Query(ctx, query, opts)
