@@ -612,6 +612,18 @@ func TestConfiguration(t *testing.T) {
   hashing:
     seed: 42
   writeNewSeriesAsync: true
+  tracing:
+    backend: jaeger
+    jaeger:
+      serviceName: ""
+      disabled: false
+      rpc_metrics: false
+      tags: []
+      sampler: null
+      reporter: null
+      headers: null
+      baggage_restrictions: null
+      throttler: null
 coordinator: null
 `
 
