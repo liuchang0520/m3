@@ -139,7 +139,7 @@ type DBConfiguration struct {
 	WriteNewSeriesAsync bool `yaml:"writeNewSeriesAsync"`
 
 	// Tracing configures opentracing. If not provided, tracing is disabled.
-	Tracing instrument.TracingConfiguration `yaml:"tracing"`
+	Tracing *instrument.TracingConfiguration `yaml:"tracing"`
 }
 
 // InitDefaultsAndValidate initializes all default values and validates the Configuration.

@@ -9,6 +9,11 @@ if [[ "$FORCE_BUILD" = true ]] ; then
     DOCKER_ARGS="--build -d --renew-anon-volumes"
 fi
 
+# need to start Jaeger before m3db or else m3db will not be able to talk to the Jaeger agent.
+if [[ "$START_JAEGER" = true ]] ; then
+    docker-compose -f docker-compose.yml up $DOCKER_ARGS jaeger
+fi
+
 echo "Bringing up nodes in the background with docker compose, remember to run ./stop.sh when done"
 docker-compose -f docker-compose.yml up $DOCKER_ARGS m3coordinator01
 docker-compose -f docker-compose.yml up --build -d --renew-anon-volumes m3db_seed
@@ -217,6 +222,9 @@ if [[ "$START_JAEGER" = true ]] ; then
     echo "Jaeger UI available at localhost:16686"
 fi
 
+if [[ "$START_JAEGER" = true ]] ; then
+    echo "Jaeger UI available at localhost:16686"
+fi
 echo "Prometheus available at localhost:9090"
 echo "Grafana available at localhost:3000"
 echo "Run ./stop.sh to shutdown nodes when done"

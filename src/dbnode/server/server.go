@@ -194,17 +194,22 @@ func Run(runOpts RunOptions) {
 		logger.Fatalf("could not resolve local host ID: %v", err)
 	}
 
-	// setup tracer
-	tracer, traceCloser, err := cfg.Tracing.NewTracer(serviceName, scope, zapLogger)
-	if err != nil {
-		logger.Fatalf("could not initialize tracing for m3dbnode: %v", err)
-	}
+	var (
+		tracer      opentracing.Tracer
+		traceCloser io.Closer
+	)
 
-	defer traceCloser.Close()
-
-	if _, ok := tracer.(opentracing.NoopTracer); ok {
+	if cfg.Tracing == nil {
+		tracer = opentracing.NoopTracer{}
 		logger.Infof("tracing disabled for %s; set `tracing.backend` to enable", serviceName)
 	} else {
+		// setup tracer
+		tracer, traceCloser, err = cfg.Tracing.NewTracer(serviceName, scope, zapLogger)
+		if err != nil {
+			logger.Fatalf("could not initialize tracing for m3dbnode: %v", err)
+		}
+
+		defer traceCloser.Close()
 		logger.Infof("tracing enabled for %s", serviceName)
 	}
 

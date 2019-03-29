@@ -27,9 +27,6 @@ coordinator:
     idScheme: quoted
 
 db:
-  tracing:
-    backend: jaeger
-
   logging:
     level: info
 

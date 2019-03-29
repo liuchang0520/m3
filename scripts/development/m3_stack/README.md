@@ -17,7 +17,20 @@ Use Grafana by navigating to `http://localhost:3000` and using `admin` for both 
 
 ## Jaeger
 
-To start Jaeger, set the environment variable `START_JAEGER` to `true`.
+To start Jaeger, add the following to your `m3dbnode.yml` file under `db`:
+
+```yaml
+tracing:
+  backend: jaeger
+  jaeger:
+    reporter:
+      localAgentHostPort: jaeger:6831
+    sampler:
+      type: const
+      param: 1
+```
+
+Also, you need to set the environment variable `START_JAEGER` to `true` when you run `start_m3.sh`.
 
 ```
 START_JAEGER=true ./start_m3.sh
