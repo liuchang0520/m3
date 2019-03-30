@@ -1207,6 +1207,20 @@ func (mr *MockIStreamMockRecorder) PeekBits(numBits interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeekBits", reflect.TypeOf((*MockIStream)(nil).PeekBits), numBits)
 }
 
+// RemainingBitsInCurrentByte mocks base method
+func (m *MockIStream) RemainingBitsInCurrentByte() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemainingBitsInCurrentByte")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// RemainingBitsInCurrentByte indicates an expected call of RemainingBitsInCurrentByte
+func (mr *MockIStreamMockRecorder) RemainingBitsInCurrentByte() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemainingBitsInCurrentByte", reflect.TypeOf((*MockIStream)(nil).RemainingBitsInCurrentByte))
+}
+
 // Reset mocks base method
 func (m *MockIStream) Reset(r io.Reader) {
 	m.ctrl.T.Helper()
