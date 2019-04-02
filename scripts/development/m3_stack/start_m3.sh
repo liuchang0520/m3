@@ -12,6 +12,12 @@ fi
 # need to start Jaeger before m3db or else m3db will not be able to talk to the Jaeger agent.
 if [[ "$START_JAEGER" = true ]] ; then
     docker-compose -f docker-compose.yml up $DOCKER_ARGS jaeger
+    sleep 5
+    JAEGER_STATUS=$(curl -s -o /dev/null -w '%{http_code}' localhost:14269)
+    if [ $JAEGER_STATUS -ne 204 ]; then
+        echo "Jaeger could not start"
+        return 0
+    fi
 fi
 
 echo "Bringing up nodes in the background with docker compose, remember to run ./stop.sh when done"
@@ -215,11 +221,6 @@ if [[ "$AGGREGATOR_PIPELINE" = true ]]; then
     # May not necessarily flush
     echo "Sending unaggregated metric to m3collector"
     curl http://localhost:7206/api/v1/json/report -X POST -d '{"metrics":[{"type":"gauge","value":42,"tags":{"__name__":"foo_metric","foo":"bar"}}]}'
-fi
-
-if [[ "$START_JAEGER" = true ]] ; then
-    docker-compose -f docker-compose.yml up $DOCKER_ARGS jaeger
-    echo "Jaeger UI available at localhost:16686"
 fi
 
 if [[ "$START_JAEGER" = true ]] ; then
