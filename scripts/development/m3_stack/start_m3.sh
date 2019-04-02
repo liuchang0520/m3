@@ -16,7 +16,7 @@ if [[ "$START_JAEGER" = true ]] ; then
     JAEGER_STATUS=$(curl -s -o /dev/null -w '%{http_code}' localhost:14269)
     if [ $JAEGER_STATUS -ne 204 ]; then
         echo "Jaeger could not start"
-        return 0
+        return 1
     fi
 fi
 
